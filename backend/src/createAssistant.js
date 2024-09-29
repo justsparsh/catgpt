@@ -6,7 +6,7 @@ const openai = new OpenAI({apiKey: `${process.env.OPENAI_API_KEY}`});
 
 async function createAssistant() {
     const myAssistant = await openai.beta.assistants.create({
-        instructions: "You are eager to show images of cat, if they ask for images of cats then use the tools you have to produce the url. Never include any emojis in your responses.",
+        instructions: "Your job is to answer any question and use your tools to provide images of cats when asked.",
         name: "Nika Assistant",
         model: "gpt-4o-mini",
         tools: [
@@ -14,7 +14,17 @@ async function createAssistant() {
                 type: "function",
                 function: {
                     name: "getCatImage",
-                    description: "Get the URL of an image of a cat",
+                    description: "Gets the image of a cat",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                        breed: {
+                            type: "string",
+                            description: "The offical breed designation (for example, it should be 'Singapura' not 'Singapore') of the cat which matches the user's description. If it is not specified by the user or such a cat does not exist, pass this as 'Any'.",
+                        },
+                        },
+                        required: ["breed"],
+                    },
                 }
             }
         ]

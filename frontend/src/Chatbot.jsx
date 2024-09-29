@@ -13,7 +13,7 @@ const Chatbot = () => {
   const lastMessageTime = useRef(Date.now());
 
   const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
 
   useEffect(scrollToBottom, [messages, scrollToBottom]);
@@ -22,7 +22,7 @@ const Chatbot = () => {
     // Check if messages are sent too fast
     const currentTime = Date.now();
     if (currentTime - lastMessageTime.current < RATE_LIMIT_DELAY) {
-      setError("Please wait a moment before sending another message.");
+      setError('Please wait a moment before sending another message.');
       return;
     }
     lastMessageTime.current = currentTime;
@@ -31,19 +31,19 @@ const Chatbot = () => {
     setInput('');
     setError(null);
 
-    //Check if message is only whitespace
+    // Check if message is only whitespace
     if (!trimmedInput) {
-      setError("Please enter a message.");
+      setError('Please enter a message.');
       return;
     }
 
-    //Check if message is too long
+    // Check if message is too long
     if (trimmedInput.length > MAX_MESSAGE_LENGTH) {
       setError(`Message must be ${MAX_MESSAGE_LENGTH} characters or less.`);
       return;
     }
 
-    //Display user message
+    // Display user message
     setMessages((prevMessages) => [
       ...prevMessages,
       { text: trimmedInput, sender: 'user' },
@@ -60,11 +60,10 @@ const Chatbot = () => {
         body: JSON.stringify({ prompt: trimmedInput }),
       });
 
-      const headers = response.headers;
-      const contentType = headers.get('Content-Type');
+      const contentType = response.headers.get('Content-Type');
       console.log(contentType);
 
-      if(contentType === "application/json; charset=utf-8") {
+      if (contentType === 'application/json; charset=utf-8') { //catch cat image case
         const data = await response.json();
         console.log(data);
         if (data.imageUrl) {
@@ -72,11 +71,10 @@ const Chatbot = () => {
             ...prevMessages,
             { text: <img src={data.imageUrl} alt="bot response" className="max-w-full h-auto" />, sender: 'bot' },
           ]);
-          setIsLoading(true);
+          setIsLoading(false);
         }
       } else {
-
-        //read the streamed message
+        // Read the streamed message
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let fullResponse = '';
@@ -84,11 +82,11 @@ const Chatbot = () => {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          
+
           const chunk = decoder.decode(value);
           const lines = chunk.split('\n\n');
-          
-          //parse through the text
+
+          // Parse through the text
           for (const line of lines) {
             if (line.startsWith('data: ')) {
               try {
@@ -97,7 +95,7 @@ const Chatbot = () => {
                   throw new Error(data.error);
                 }
                 fullResponse += data;
-                //display text as it comes in
+                // Display text as it comes in
                 setMessages((prevMessages) => {
                   const lastMessage = prevMessages[prevMessages.length - 1];
                   if (lastMessage && lastMessage.sender === 'bot') {
@@ -118,16 +116,47 @@ const Chatbot = () => {
         }
       }
     } catch (err) {
-      setError("An error occurred while sending your message. Please try again.");
+      setError('An error occurred while sending your message. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleNewChat = async () => {
+    // Clear messages
+    setMessages([]);
+    setInput('');
+    setError(null);
+
+    try {
+      const response = await fetch('http://localhost:3000/chat/new', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create a new chat.');
+      }
+
+    } catch (err) {
+      setError('An error occurred while creating a new chat. Please try again.');
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen w-full bg-gray-100">
-      <div className="bg-blue-600 text-white p-4 text-lg font-bold">
-        Nika Cat Supplier
+      <div className="flex justify-between items-center bg-blue-600 p-4">
+        <div className="text-white text-lg font-bold">
+          Nika Cat Supplier
+        </div>
+        <button
+          onClick={handleNewChat}
+          className="bg-green-500 text-white rounded-full px-4 py-2 hover:bg-green-600 transition-colors"
+        >
+          New Chat
+        </button>
       </div>
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((message, index) => (
