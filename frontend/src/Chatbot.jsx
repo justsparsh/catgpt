@@ -19,101 +19,56 @@ const Chatbot = () => {
   useEffect(scrollToBottom, [messages, scrollToBottom]);
 
   const handleSend = async () => {
-    // Check if messages are sent too fast
     const currentTime = Date.now();
     if (currentTime - lastMessageTime.current < RATE_LIMIT_DELAY) {
       setError('Please wait a moment before sending another message.');
       return;
     }
     lastMessageTime.current = currentTime;
-
+  
     const trimmedInput = input.trim();
     setInput('');
     setError(null);
-
-    // Check if message is only whitespace
+  
     if (!trimmedInput) {
       setError('Please enter a message.');
       return;
     }
-
-    // Check if message is too long
+  
     if (trimmedInput.length > MAX_MESSAGE_LENGTH) {
       setError(`Message must be ${MAX_MESSAGE_LENGTH} characters or less.`);
       return;
     }
-
-    // Display user message
+  
     setMessages((prevMessages) => [
       ...prevMessages,
       { text: trimmedInput, sender: 'user' },
     ]);
     setIsLoading(true);
-
+  
     try {
       const response = await fetch('http://localhost:3000/message/new', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'text/event-stream',
+          Accept: 'text/event-stream',
         },
         body: JSON.stringify({ prompt: trimmedInput }),
       });
-
+  
+      if (response.status === 500) {
+        setError('A server error occurred. Please try again later.');
+        setIsLoading(false);
+        return;
+      }
+  
       const contentType = response.headers.get('Content-Type');
-      console.log(contentType);
-
-      if (contentType === 'application/json; charset=utf-8') { //catch cat image case
+      
+      if (contentType === 'application/json; charset=utf-8') {
         const data = await response.json();
-        console.log(data);
-        if (data.imageUrl) {
-          setMessages((prevMessages) => [
-            ...prevMessages,
-            { text: <img src={data.imageUrl} alt="bot response" className="max-w-full h-auto" />, sender: 'bot' },
-          ]);
-          setIsLoading(false);
-        }
+        handleCatImageResponse(data);
       } else {
-        // Read the streamed message
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let fullResponse = '';
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value);
-          const lines = chunk.split('\n\n');
-
-          // Parse through the text
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.slice(6));
-                if (data.error) {
-                  throw new Error(data.error);
-                }
-                fullResponse += data;
-                // Display text as it comes in
-                setMessages((prevMessages) => {
-                  const lastMessage = prevMessages[prevMessages.length - 1];
-                  if (lastMessage && lastMessage.sender === 'bot') {
-                    return [
-                      ...prevMessages.slice(0, -1),
-                      { ...lastMessage, text: fullResponse },
-                    ];
-                  } else {
-                    return [...prevMessages, { text: fullResponse, sender: 'bot' }];
-                  }
-                });
-              } catch (err) {
-                setError(err.message);
-                break;
-              }
-            }
-          }
-        }
+        await handleStreamedResponse(response.body);
       }
     } catch (err) {
       setError('An error occurred while sending your message. Please try again.');
@@ -121,7 +76,58 @@ const Chatbot = () => {
       setIsLoading(false);
     }
   };
-
+  
+  // Handle cat image response
+  const handleCatImageResponse = (data) => {
+    if (data.imageUrl) {
+      setMessages((prevMessages) => [
+        ...prevMessages,
+        { text: <img src={data.imageUrl} alt="bot response" className="max-w-full h-auto" />, sender: 'bot' },
+      ]);
+      setIsLoading(false);
+    }
+  };
+  
+  // Handle text-streamed responses
+  const handleStreamedResponse = async (responseBody) => {
+    const reader = responseBody.getReader();
+    const decoder = new TextDecoder();
+    let fullResponse = '';
+  
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+  
+      const chunk = decoder.decode(value);
+      const lines = chunk.split('\n\n');
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.error) {
+              throw new Error(data.error);
+            }
+            fullResponse += data;
+            setMessages((prevMessages) => {
+              const lastMessage = prevMessages[prevMessages.length - 1];
+              if (lastMessage && lastMessage.sender === 'bot') {
+                return [
+                  ...prevMessages.slice(0, -1),
+                  { ...lastMessage, text: fullResponse },
+                ];
+              } else {
+                return [...prevMessages, { text: fullResponse, sender: 'bot' }];
+              }
+            });
+          } catch (err) {
+            setError(err.message);
+            break;
+          }
+        }
+      }
+    }
+  };
+  
   const handleNewChat = async () => {
     // Clear messages
     setMessages([]);

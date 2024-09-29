@@ -6,7 +6,7 @@ import getCatImage from "./getCatImage.js";
 dotenv.config();
 const openai = new OpenAI({ apiKey: `${process.env.OPENAI_API_KEY}` });
 
-class EventHandler extends EventEmitter {
+class EventHandler extends EventEmitter { //redundant class
     constructor(client) {
       super();
       this.client = client;

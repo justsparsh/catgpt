@@ -20,11 +20,8 @@ messageRoutes.post('/new', async (req, res) => {
     const runs = await openai.beta.threads.runs.list(threadId);
 
     // Cancel any previous incomplete actions
-    for (const run of runs.data) {
-      if (run.status === 'requires_action') {
-        await openai.beta.threads.runs.cancel(threadId, run.id);
-      }
-    }
+    const incompleteRuns = runs.data.filter(run => run.status === 'requires_action');
+    await Promise.all(incompleteRuns.map(run => openai.beta.threads.runs.cancel(threadId, run.id)));
 
     // Create a new message
     await openai.beta.threads.messages.create(threadId, {
@@ -33,7 +30,6 @@ messageRoutes.post('/new', async (req, res) => {
     });
 
     let headersSet = false;
-
     const setHeaderIfStreaming = () => {
       if (!headersSet) {
         res.setHeader('Content-Type', 'text/event-stream');
@@ -44,26 +40,22 @@ messageRoutes.post('/new', async (req, res) => {
     };
 
     eventHandler.on('event', async (event) => {
-      if (event.event === 'thread.message.delta') {
+      if (event.event === 'thread.message.delta') { 
+        // Stream messages to frontend
         setHeaderIfStreaming();
         const deltaText = event.data.delta.content[0].text.value;
         res.write(`data: ${JSON.stringify(deltaText)}\n\n`);
-      } else if (event.event === 'thread.run.requires_action') {
-        const tool_calls = event.data.required_action.submit_tool_outputs.tool_calls;
-        if (tool_calls) {
-          const functionInfo = tool_calls[0].function;
-          if (functionInfo.name === "getCatImage") {
-            const args = JSON.parse(functionInfo.arguments);
-            const breed = args.breed;
-            const url = await getCatImage(breed);
-            return res.status(200).json({ imageUrl: url });
-          } else {
-            return res.status(500).json({message: "Try again"})
-          }
+      } else if (event.event === 'thread.run.requires_action') { 
+        // Handle getCatImage and return URL
+        const toolCall = event.data.required_action.submit_tool_outputs.tool_calls?.[0]?.function;
+        if (toolCall?.name === "getCatImage") {
+          const args = JSON.parse(toolCall.arguments);
+          const url = await getCatImage(args.breed);
+          return res.status(200).json({ imageUrl: url });
         } else {
-          return res.status(500).json({message: "Try again"})
+          return res.status(500).json({ message: "Internal error, please try again" });
         }
-      } else if (event.event === 'thread.run.completed') {
+      } else if (event.event === 'thread.run.completed') { 
         res.end();
       } else {
         eventHandler.onEvent(event);
@@ -81,9 +73,7 @@ messageRoutes.post('/new', async (req, res) => {
     }
 
   } catch (error) {
-    console.error('Error handling the request:', error);
-    res.write(`data: ${JSON.stringify({ error: 'Something went wrong' })}\n\n`);
-    res.end();
+    return res.status(500).json({ message: "Something went wrong" });
   }
 });
 
