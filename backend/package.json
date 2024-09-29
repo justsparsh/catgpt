@@ -1,0 +1,19 @@
+{
+  "name": "nikainterview",
+  "version": "1.0.0",
+  "description": "Take home assignment for Nika.eco",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "author": "Sparsh",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "express-sse": "^0.5.3",
+    "openai": "^4.65.0"
+  },
+  "type": "module"
+}
